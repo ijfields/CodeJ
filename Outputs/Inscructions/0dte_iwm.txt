@@ -1,0 +1,82 @@
+Here is a structured trading strategy based on the given content:
+
+Entry Conditions:
+
+Sell 10 out-of-the-money put options on IWM (iShares Russell 2000 ETF) with a strike price of $183 and an expiration of the same day (zero DTE).
+Sell 5 out-of-the-money call options on IWM with a strike price of 
+191
+a
+n
+d
+5
+w
+i
+t
+h
+a
+s
+t
+r
+i
+k
+e
+p
+r
+i
+c
+e
+o
+f
+191and5withastrikepriceof190, all with an expiration of the same day (zero DTE).
+Enter the trades early in the trading day.
+Exit Conditions:
+
+Buy back the put options later in the same trading day when the value has decreased to $0.02 or less.
+Buy back the call options later in the same trading day when the value has decreased to 
+0.15
+o
+r
+l
+e
+s
+s
+f
+o
+r
+t
+h
+e
+0.15orlessforthe191 calls and 
+0.07
+o
+r
+l
+e
+s
+s
+f
+o
+r
+t
+h
+e
+0.07orlessforthe190 calls.
+Position Sizing:
+
+Sell 10 put options and 10 call options (5 of each strike price).
+Each trade should be sized to risk approximately 1-2% of the total trading account.
+Risk Management:
+
+Stop Loss: None explicitly mentioned, but the strategy is highly risky with unlimited downside potential.
+Take Profit: The target is to buy back the options later in the day for a smaller debit than the initial credit received.
+Maximum Position Size: 10 put options and 10 call options (5 of each strike price).
+Timeframe:
+
+Intraday trading, holding the positions for a few hours.
+Asset Class:
+
+Equity index ETF (IWM - iShares Russell 2000 ETF).
+Technical Indicators:
+
+No specific technical indicators are mentioned. The strategy relies on the underlying price staying within a certain range during the trading day.
+Overall, this is a high-risk, low-reward trading strategy that involves selling short-dated, out-of-the-money options on the Russell 2000 ETF (IWM). The strategy aims to capture small gains by selling the options in the morning and buying them back later in the day at a lower price, but it has significant downside risk if the underlying price moves significantly in either direction. This strategy would require very careful risk management and position sizing to be considered for algorithmic implementation.

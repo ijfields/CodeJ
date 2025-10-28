@@ -1,0 +1,203 @@
+Here is a structured trading strategy based on the Zero Loss Butterfly video:
+
+Strategy Name: Zero Loss Butterfly (Stock + Married Put + Call Butterfly)
+
+Asset Class:
+- Individual stocks or ETFs with liquid options markets
+- Primary test symbols: VISA (V), SPY
+- Stock price range: $250-$600 (adjust strikes accordingly)
+
+Entry Conditions:
+
+1. Buy 100 shares of the underlying stock at current market price.
+2. Simultaneously establish 3-leg options position with SAME expiration:
+   - Buy 1 protective PUT at strike = current_price - $13 (protective floor)
+   - Sell 2 CALLs at strike = current_price - $3 (income generation) **CRITICAL: 2 contracts**
+   - Buy 1 CALL at strike = (sell strike) + $10 (cap upside risk)
+3. Target expiration: 50-65 days (DTE), ideally 57 days
+4. Round ALL strikes to nearest $5 increment for better data availability
+5. Enter position ONLY if zero-loss condition is met:
+   - (Stock price - PUT strike) <= Estimated net option credit
+
+Position Structure Verification:
+- Check actual positions held (not just order flags)
+- Stock should be purchased EXACTLY ONCE per strategy instance
+- If options canceled but stock owned, re-establish options only (not stock)
+- Maintain 1 PUT + (-2) CALLs + 1 CALL ratio at all times
+
+Exit Conditions:
+
+1. Roll position 7 days before expiration:
+   - Close existing 3-leg options position (sell PUT, buy 2 CALLs, sell CALL)
+   - Open new 3-leg options position with ~57 DTE on new expiration
+   - Keep existing stock (DO NOT sell and re-buy)
+   - Recalculate strikes based on current stock price
+2. If roll fails (options canceled due to data unavailability):
+   - Retry next trading day with same logic
+   - Maximum 3 retry attempts before exiting
+3. Exit entire position if:
+   - Test period ends
+   - Backtest completes
+   - Manual exit requested
+
+Position Sizing:
+
+- 100 shares per position (standard options contract size)
+- 1 PUT contract (covers 100 shares)
+- 2 CALL contracts (short position)
+- 1 CALL contract (long position - caps risk)
+- Size position based on available capital (minimum ~$25,000 for VISA, ~$55,000 for SPY)
+
+Risk Management:
+
+Stop Loss:
+- Theoretical: PUT strike provides floor protection
+- Actual: No hard stop loss in strategy
+- Maximum stock loss: (Stock purchase price - PUT strike) * 100
+
+Take Profit:
+- Target: Small positive return or break-even
+- Driven by option premium collection offsetting stock loss potential
+
+Maximum Position Size:
+- 100 shares stock
+- Net 3 option contracts (1 long PUT, 2 short CALLs, 1 long CALL)
+
+Capital at Risk:
+- Approximately stock purchase price minus PUT protection
+- Example: Stock at $343, PUT at $330 = $1,300 at risk per position
+- Should be offset by net option credit
+
+Timeframe:
+
+- Position holding period: 50-57 days per cycle
+- Roll frequency: Every expiration cycle (~8 weeks)
+- Intraday execution: Market open preferred for entry
+
+Technical Indicators:
+
+- No specific technical indicators required
+- Strategy is structure-based (defined by option positions)
+- Relies on stock price stability and option premium collection
+
+Implementation Requirements:
+
+1. **CRITICAL: Stock Purchase Logic**
+   - Use position-based checking: `len(self.get_positions()) == 0` for stock
+   - NOT flag-based tracking (unreliable with canceled orders)
+   - Stock should appear ONCE in entire backtest trades CSV
+   - If stock owned but options missing, establish OPTIONS ONLY
+
+2. **Strike Selection Requirements**
+   - Query option chain with `self.get_chains()`
+   - Round target strikes to nearest $5: `round(price / 5) * 5`
+   - Find nearest available strikes from chain
+   - Validate strikes are standard ($5 intervals for SPY, may vary for stocks)
+
+3. **Zero-Loss Validation**
+   - Before entry, verify: (stock_price - put_strike) <= estimated_option_credit
+   - Log validation result for review
+   - Estimated credit = (2 * sell_call_price) - put_price - buy_call_price
+
+4. **Order Execution**
+   - Submit all 4 legs (entry) or 3 legs (options only) as separate orders
+   - Use market orders for backtesting reliability
+   - Log all order submissions with identifiers
+   - Check fill status on next iteration
+
+5. **Position Management**
+   - Every iteration: Check actual positions held
+   - Verify: stock_quantity == 100 (or 0)
+   - Verify: put_quantity == 1, short_call_quantity == 2, long_call_quantity == 1
+   - If mismatch, determine if re-entry needed
+
+Testing Requirements:
+
+1. **Confirmed Trade Test (Video Match)**
+   - Date: August 21, 2025 to October 17, 2025
+   - Symbol: VISA (V)
+   - Expected entry price: ~$343
+   - Expected strikes: $330 PUT, $340 CALL (x2), $350 CALL
+   - Validate: Exact match to video specifications
+
+2. **Historical Data Test (Reliability)**
+   - Date: August 21, 2024 to October 17, 2024
+   - Symbols: Both SPY and VISA
+   - Purpose: Complete data availability, successful rolls
+   - Compare performance between symbols
+
+3. **Validation Requirements**
+   - Create validator script to check trades CSV:
+     * Count stock purchases (must be 1)
+     * Count option fills vs cancels (calculate fill rate)
+     * Verify butterfly structure (1/-2/1 ratio)
+     * Validate position duration (should hold 50+ days)
+
+4. **Performance Comparison**
+   - Compare strategy vs underlying buy-and-hold
+   - Metrics: Total return, CAGR, Sharpe ratio, max drawdown
+   - Generate tearsheet for both strategy and benchmark
+   - Determine: Is this strategy profitable?
+
+Configuration:
+
+- Use parameterized backtesting dates (NOT environment variables)
+- Create credentials.py for API keys (no dates)
+- Each test script defines its own date range
+- Follow pattern from StrategyTemplate.py
+
+Expected Deliverables:
+
+1. Complete Lumibot strategy class: zero_loss_butterfly.py
+2. Test script for video trade: test_video_trade_2025.py
+3. Test script for historical data: test_spy_vs_visa_2024.py
+4. Validator script: backtest_validator.py
+5. Configuration: credentials.py
+6. Documentation:
+   - VIDEO_TRADE_DETAILS.md (confirmed trade specs)
+   - SPY_VS_VISA_COMPARISON.md (performance analysis)
+   - COMPREHENSIVE_ANALYSIS_SUMMARY.md (final recommendation)
+
+Risk Assessment:
+
+Overall Risk Level: MODERATE TO HIGH
+
+Risks:
+1. Unlimited upside capped by short calls (opportunity cost)
+2. Stock can decline below PUT strike (limited but real loss)
+3. Assignment risk on short calls if ITM
+4. Complex multi-leg structure (execution risk)
+5. Capital intensive (requires full stock purchase)
+6. Options data availability (backtesting challenge)
+7. Transaction costs not included in backtest (real cost higher)
+
+Mitigation:
+1. PUT provides floor protection at strike price
+2. Long CALL caps losses above short CALL strikes
+3. Use liquid symbols (SPY preferred over individual stocks)
+4. Round strikes to $5 for better data availability
+5. Test with historical data before live trading
+
+Expected Outcome:
+
+Based on testing with 2024 data (Aug 21 - Oct 17):
+- Strategy return: ~1% (vs SPY +4%, VISA +7%)
+- Volatility reduction: 69-75% (significant)
+- Drawdown reduction: 78-81% (excellent)
+- Sharpe ratio: 0.44-0.45 (poor vs buy-and-hold 1.86-2.05)
+
+**RECOMMENDATION**: Strategy NOT profitable compared to simple buy-and-hold.
+While it successfully reduces volatility and drawdown, returns are insufficient to justify complexity and capital requirements.
+
+Better alternatives: Buy-and-hold, covered calls, cash-secured puts, 60/40 portfolio.
+
+Implementation Notes:
+
+1. The "zero loss" name is misleading marketing - strategy CAN lose money
+2. Works best in range-bound markets (not trending markets)
+3. Premium collection insufficient to offset capped upside in bull markets
+4. Requires sophisticated options pricing data for reliable backtesting
+5. Real-world transaction costs would reduce returns further
+6. Consider this an educational exercise, not a production strategy
+
+This strategy requires very careful implementation with robust position tracking and validation to ensure correct execution. The complexity does not appear justified by the performance results based on historical testing.

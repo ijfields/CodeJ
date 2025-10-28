@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Credentials and secrets
+credentials.py
+.env
+*.key
+*.pem
+*_secret*
+*_secrets*
+
+# API keys
+polygon_api_key.txt
+alpaca_api_key.txt
+
+# Logs and data
+logs/
+*.log
+
+# Large backtest output files (keep .md docs, ignore data files)
+*.csv
+*.html
+*.pkl
+*.pickle
+tearsheet_*.png
+
+# But keep instruction files
+!Outputs/Instructions/*.txt
+!Outputs/Instructions/*.md
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database files
+data/
+*.db
+*.sqlite
+
+# Subdirectories with their own git repos
+moon-dev-ai-agents/
+Option_Scraper/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
