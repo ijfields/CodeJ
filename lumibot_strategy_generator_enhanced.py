@@ -31,7 +31,7 @@ import os
 import sys
 
 # Import the Claude agent integration layer
-from claude_agent_integration import generate_lumibot_strategy, validate_strategy_code
+from claude_agent_integration import generate_instruction_file, validate_instruction_file
 
 # ================================================================
 # PAGE CONFIGURATION
@@ -98,16 +98,23 @@ st.markdown("### **Enhanced with Claude Code AI Agents**")
 
 st.markdown("""
 <div class="info-box">
-<b>🚀 Multi-Agent Strategy Generation</b><br>
-This enhanced version uses 5 specialized AI agents working together to create production-quality Lumibot strategies:
+<b>🚀 Two-Stage Strategy Generation Workflow</b><br>
+This enhanced version uses a two-stage approach for maximum control and quality:
+<br><br>
+<b>Stage 1 (This App):</b> Content → Structured Instruction File
 <ul>
-<li><b>Researcher</b> - Extracts precise trading rules from your content</li>
-<li><b>Architect</b> - Designs clean, maintainable code structure</li>
-<li><b>Coder</b> - Implements production-ready Python code</li>
-<li><b>Validator</b> - Validates code quality and API compliance</li>
-<li><b>Optimizer</b> - Refines and optimizes the final strategy</li>
+<li>Extract strategy from YouTube, PDF, or text</li>
+<li>Structure into template-compliant instruction file</li>
+<li>Review and edit instructions before code generation</li>
+<li>Save to: Outputs/Inscructions/</li>
 </ul>
-<i>Result: Production-quality code with comprehensive error handling, logging, and documentation</i>
+<b>Stage 2 (Claude Code):</b> Instruction File → Production Strategy
+<ul>
+<li>Use /lumibot-generate command with instruction file</li>
+<li>5 specialized AI agents generate production code</li>
+<li>Complete strategy + tests + validation + documentation</li>
+</ul>
+<i>Result: Full control over requirements + production-quality code from proven workflow</i>
 </div>
 """, unsafe_allow_html=True)
 
@@ -239,6 +246,7 @@ with col1:
                         transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
                         content = ' '.join([item['text'] for item in transcript_list])
                         st.session_state['content'] = content
+                        st.session_state['youtube_url'] = youtube_url  # Store URL for instruction file
 
                         st.success(f"✅ Transcript extracted! ({len(content)} characters)")
 
@@ -309,7 +317,7 @@ with col2:
     st.header("🎯 Generate Strategy")
 
     if st.button(
-        "🚀 Generate Lumibot Strategy with AI Agents",
+        "📝 Generate Instruction File (Stage 1)",
         type="primary",
         use_container_width=True,
         disabled='content' not in st.session_state
@@ -318,93 +326,87 @@ with col2:
             st.error("Please provide input first!")
             st.stop()
 
-        # Agent workflow visualization
-        st.markdown("### 🤖 Agent Workflow")
+        # Instruction file generation workflow
+        st.markdown("### 📝 Stage 1: Instruction File Generation")
 
-        # Create placeholders for agent progress
-        agent_progress_container = st.container()
+        # Create placeholders for progress
+        progress_container = st.container()
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # Agent step tracking
-        agent_steps = {
-            1: {"name": "🔍 Researcher", "desc": "Analyzing strategy content", "status": "pending"},
-            2: {"name": "🏗️ Architect", "desc": "Designing architecture", "status": "pending"},
-            3: {"name": "💻 Coder", "desc": "Implementing code", "status": "pending"},
-            4: {"name": "✅ Validator", "desc": "Validating quality", "status": "pending"},
-            5: {"name": "⚡ Optimizer", "desc": "Optimizing code", "status": "pending"},
+        # Workflow step tracking (simplified for instruction generation)
+        workflow_steps = {
+            1: {"name": "📖 Extract", "desc": "Analyzing strategy content", "status": "pending"},
+            2: {"name": "📋 Structure", "desc": "Structuring instruction file", "status": "pending"},
+            3: {"name": "💾 Save", "desc": "Saving instruction file", "status": "pending"},
         }
 
-        # Display agent steps
-        with agent_progress_container:
+        # Display workflow steps
+        with progress_container:
             step_placeholders = {}
-            for step_num, step_info in agent_steps.items():
+            for step_num, step_info in workflow_steps.items():
                 step_placeholders[step_num] = st.empty()
                 step_placeholders[step_num].markdown(
                     f'<div class="agent-step">{step_info["name"]}: {step_info["desc"]}</div>',
                     unsafe_allow_html=True
                 )
 
-        # Progress callback for agent coordination
+        # Progress callback for workflow tracking
         def update_progress(step, total, message, progress_pct):
             # Update progress bar
             progress_bar.progress(progress_pct / 100)
             status_text.text(f"[{step}/{total}] {message}")
 
-            # Update agent step status
+            # Update workflow step status
             if step in step_placeholders:
-                agent_steps[step]["status"] = "active"
+                workflow_steps[step]["status"] = "active"
                 step_placeholders[step].markdown(
-                    f'<div class="agent-step active">✨ {agent_steps[step]["name"]}: {message}</div>',
+                    f'<div class="agent-step active">✨ {workflow_steps[step]["name"]}: {message}</div>',
                     unsafe_allow_html=True
                 )
 
             # Mark previous steps as complete
             for i in range(1, step):
-                if i in step_placeholders and agent_steps[i]["status"] != "complete":
-                    agent_steps[i]["status"] = "complete"
+                if i in step_placeholders and workflow_steps[i]["status"] != "complete":
+                    workflow_steps[i]["status"] = "complete"
                     step_placeholders[i].markdown(
-                        f'<div class="agent-step complete">✅ {agent_steps[i]["name"]}: Complete</div>',
+                        f'<div class="agent-step complete">✅ {workflow_steps[i]["name"]}: Complete</div>',
                         unsafe_allow_html=True
                     )
 
-        # Generate strategy using Claude Code agents
-        with st.spinner("AI Agents are working..."):
-            result = generate_lumibot_strategy(
+        # Generate instruction file
+        youtube_url = st.session_state.get('youtube_url', None)  # Store URL if from YouTube
+        with st.spinner("Generating instruction file..."):
+            result = generate_instruction_file(
                 content=st.session_state['content'],
                 strategy_name=strategy_name,
-                content_type=input_type.lower().replace(' ', '_'),
+                source_type=input_type.lower().replace(' ', '_'),
+                source_url=youtube_url,
                 progress_callback=update_progress
             )
 
         # Mark all steps as complete
         for step_num in step_placeholders:
-            agent_steps[step_num]["status"] = "complete"
+            workflow_steps[step_num]["status"] = "complete"
             step_placeholders[step_num].markdown(
-                f'<div class="agent-step complete">✅ {agent_steps[step_num]["name"]}: Complete</div>',
+                f'<div class="agent-step complete">✅ {workflow_steps[step_num]["name"]}: Complete</div>',
                 unsafe_allow_html=True
             )
 
         progress_bar.progress(100)
-        status_text.text("✅ All agents completed!")
+        status_text.text("✅ Instruction file generated!")
 
         # Store result in session
         if result['success']:
             st.session_state['generation_result'] = result
-            st.success("✅ Strategy generated successfully!")
-
-            # Show validation status
-            validation = result.get('validation_report', {})
-            if validation.get('is_valid'):
-                st.success("✅ Code validation passed!")
-            else:
-                st.warning("⚠️ Code was optimized to fix validation issues")
+            st.success("✅ Instruction file generated successfully!")
+            st.info(f"📁 Saved to: `{result.get('file_path')}`")
         else:
             st.error(f"❌ Generation failed: {result.get('error')}")
             st.stop()
 
 # ================================================================
-# GENERATED CONTENT DISPLAY
+# INSTRUCTION FILE DISPLAY
 # ================================================================
 
 if 'generation_result' in st.session_state:
@@ -412,108 +414,122 @@ if 'generation_result' in st.session_state:
 
     st.divider()
 
-    # Intermediate outputs (if enabled)
-    if show_intermediate:
-        st.header("📊 AI Agent Outputs")
+    # Instruction file content
+    st.header("📝 Generated Instruction File")
 
-        tab1, tab2, tab3 = st.tabs(["📋 Analysis", "🏗️ Architecture", "✅ Validation"])
+    instruction_content = result.get('instruction_file', '')
+    file_path = result.get('file_path', '')
 
-        with tab1:
-            st.markdown("### Strategy Analysis (Researcher Agent)")
-            st.markdown(result.get('analysis', 'No analysis available'))
+    st.markdown(f"""
+    <div class="success-box">
+    <b>✅ Stage 1 Complete: Instruction File Generated</b><br>
+    File saved to: <code>{file_path}</code>
+    </div>
+    """, unsafe_allow_html=True)
 
-        with tab2:
-            st.markdown("### Architecture Design (Architect Agent)")
-            st.markdown(result.get('architecture', 'No architecture available'))
+    # Preview of instruction file
+    st.markdown("### 📖 Preview")
+    st.markdown(result.get('preview', 'No preview available'))
 
-        with tab3:
-            st.markdown("### Validation Report (Validator Agent)")
-            validation = result.get('validation_report', {})
+    # Editable instruction file
+    st.markdown("### ✏️ Review and Edit Instructions")
+    st.markdown("""
+    **Instructions:** Review the generated instruction file below. Edit any sections to add specifics from your strategy.
+    Make sure to:
+    - Complete all `[TODO]` sections
+    - Add `**CRITICAL:**` markers for important details
+    - Specify exact quantities (not vague like "sell calls" → "sell 2 calls")
+    - Add specific dates for testing if known
+    """)
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                status = "✅ PASSED" if validation.get('is_valid') else "❌ FAILED"
-                st.metric("Status", status)
-            with col2:
-                st.metric("Critical Issues", len(validation.get('critical_issues', [])))
-            with col3:
-                st.metric("Warnings", len(validation.get('warnings', [])))
+    edited_instruction = st.text_area(
+        "Instruction File Content",
+        value=instruction_content,
+        height=400,
+        label_visibility="collapsed"
+    )
 
-            if validation.get('critical_issues'):
-                st.markdown("**Critical Issues:**")
-                for issue in validation['critical_issues']:
-                    st.markdown(f"- ❌ {issue}")
-
-            if validation.get('warnings'):
-                st.markdown("**Warnings:**")
-                for warning in validation['warnings']:
-                    st.markdown(f"- ⚠️ {warning}")
-
-    st.divider()
-
-    # Generated code
-    st.header("💻 Generated Lumibot Strategy Code")
-
-    code = result.get('strategy_code', '')
-    st.code(code, language='python', line_numbers=True)
-
-    # Download buttons
-    col1, col2, col3 = st.columns(3)
-
+    # Save edited version button
+    col1, col2 = st.columns(2)
     with col1:
+        if st.button("💾 Save Edited Instructions", type="primary", use_container_width=True):
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(edited_instruction)
+                st.success(f"✅ Saved to: {file_path}")
+            except Exception as e:
+                st.error(f"❌ Save failed: {str(e)}")
+
+    with col2:
         st.download_button(
-            label="📥 Download Strategy Code",
-            data=code,
-            file_name=f"{strategy_name}.py",
-            mime="text/x-python",
+            label="📥 Download Instructions",
+            data=edited_instruction,
+            file_name=f"{strategy_name}_instructions.txt",
+            mime="text/plain",
             use_container_width=True
         )
 
-    with col2:
-        if 'analysis' in result:
-            st.download_button(
-                label="📥 Download Analysis",
-                data=result['analysis'],
-                file_name=f"{strategy_name}_analysis.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
+    st.divider()
 
-    with col3:
-        if 'architecture' in result:
-            st.download_button(
-                label="📥 Download Architecture",
-                data=result['architecture'],
-                file_name=f"{strategy_name}_architecture.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
+    # Next steps for Stage 2
+    st.header("🚀 Stage 2: Generate Strategy Code")
 
-    # Backtest section (simplified - actual backtesting would require more setup)
-    if auto_backtest or st.button("▶️ Run Backtest", type="primary", use_container_width=True):
-        st.divider()
-        st.header("📊 Backtest Results")
+    st.markdown("""
+    <div class="warning-box">
+    <b>⚠️ Next Steps - Run /lumibot-generate Command</b><br>
+    After reviewing and editing the instruction file above, use the <code>/lumibot-generate</code> command
+    in Claude Code to generate the actual strategy code.
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.info(f"""
-        🎯 **Backtest Configuration:**
-        - Symbol: {backtest_symbol}
-        - Period: {start_date} to {end_date}
-        - Initial Cash: ${initial_cash:,.2f}
-        - Commission: {commission * 100:.2f}%
+    st.markdown(f"""
+    ### How to Generate Strategy Code:
 
-        ⚠️ **Note**: To run actual backtest, save the generated code and execute it with proper credentials.py setup.
-        """)
+    1. **Review and edit** the instruction file above (complete all TODO sections)
+    2. **Save** your edits using the button above
+    3. **Open Claude Code CLI** in your terminal
+    4. **Run the command:**
 
-        st.markdown("""
-        ### How to Run Backtest:
+    ```
+    /lumibot-generate
 
-        1. **Save the generated code** to a .py file
-        2. **Set up credentials.py** with your Polygon.io API key
-        3. **Run the strategy file**: `python {strategy_name}.py`
-        4. **View results** in the generated tearsheet HTML file
+    Read the instruction file at: {file_path}
 
-        For detailed instructions, see the Quick Start guide in the generated README.
-        """.format(strategy_name=strategy_name))
+    Generate a complete Lumibot strategy following the specifications.
+    Output to: Outputs/Strategies/
+    ```
+
+    5. **Wait for agents** to generate:
+       - Strategy code (`{strategy_name}.py`)
+       - Test scripts
+       - Validation reports
+       - Documentation
+
+    ### What Happens in Stage 2:
+
+    The `/lumibot-generate` command will invoke 5 specialized AI agents:
+    - **🔍 Researcher** - Analyzes instruction file
+    - **🏗️ Architect** - Designs strategy architecture
+    - **💻 Coder** - Implements production code
+    - **✅ Validator** - Validates code quality
+    - **⚡ Optimizer** - Refines and optimizes
+
+    ### Expected Outputs:
+
+    - `Outputs/Strategies/{strategy_name}.py` - Main strategy file
+    - `Outputs/Strategies/{strategy_name}_analysis.md` - Strategy analysis
+    - `Outputs/Strategies/{strategy_name}_architecture.md` - Architecture design
+    - `Outputs/Strategies/{strategy_name}_validation.md` - Validation report
+    - Test scripts and validator scripts
+
+    ### Testing the Generated Strategy:
+
+    Once the strategy is generated, you can:
+    1. Review the generated code
+    2. Run backtests with your specified date ranges
+    3. Validate results with the generated validator
+    4. Compare performance against benchmarks
+    """)
 
 # ================================================================
 # FOOTER
@@ -524,8 +540,8 @@ st.divider()
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 20px;">
     <p><b>Powered by Claude Code AI Agents</b></p>
-    <p>Multi-agent architecture: Researcher → Architect → Coder → Validator → Optimizer</p>
-    <p><i>Original concept based on Moon Dev's RBI agent pattern</i></p>
+    <p>Two-Stage Workflow: Content → Instruction File → /lumibot-generate → Production Strategy</p>
+    <p><i>Template based on Zero Loss Butterfly lessons learned</i></p>
     <p style="font-size: 12px; margin-top: 10px;">
         ⚠️ Generated strategies are for educational purposes. Always backtest thoroughly
         and paper trade before using with real money. Trading involves risk of loss.

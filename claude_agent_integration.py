@@ -1,618 +1,586 @@
 """
 Claude Code Agent Integration for Lumibot Strategy Generator
 
-This module provides a bridge between Streamlit webapp and Claude Code subagents.
-It orchestrates the multi-agent workflow for generating production-quality Lumibot strategies.
+This module provides a bridge between Streamlit webapp and instruction file generation.
+It structures trading strategy content into comprehensive instruction files that can be
+used with /lumibot-generate command.
 
-Agents Coordinated:
-1. lumibot-researcher - Extract and analyze trading rules
-2. lumibot-architect - Design strategy architecture
-3. lumibot-coder - Implement production code
-4. lumibot-validator - Validate code quality
-5. lumibot-optimizer - Refine and optimize
+Two-Stage Workflow:
+Stage 1 (This Module): Content → Instruction File
+Stage 2 (Manual): Instruction File → /lumibot-generate → Strategy Code
+
+The instruction file follows the template format refined from Zero Loss Butterfly experience,
+incorporating critical implementation details, testing requirements, and expected outcomes.
 
 Usage:
-    from claude_agent_integration import generate_lumibot_strategy
+    from claude_agent_integration import generate_instruction_file
 
-    result = generate_lumibot_strategy(
+    result = generate_instruction_file(
         content="Buy SPY when RSI < 30...",
         strategy_name="rsi_strategy",
-        output_dir="Outputs/Strategies"
+        source_type="youtube"
     )
 """
 
 import os
-import json
-import subprocess
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from datetime import datetime
 
 
-class ClaudeAgentCoordinator:
+class InstructionFileGenerator:
     """
-    Coordinates Claude Code subagents for Lumibot strategy generation.
+    Generates structured instruction files from trading strategy content.
 
-    This class manages the workflow of multiple specialized agents
-    working together to create production-quality trading strategies.
+    This class takes raw strategy content (from YouTube, PDF, or text)
+    and structures it into a template-compliant instruction file that
+    can be used with /lumibot-generate command.
     """
 
-    def __init__(self, output_dir: str = "Outputs/Strategies"):
+    def __init__(self, output_dir: str = "Outputs/Inscructions"):
         """
-        Initialize the agent coordinator.
+        Initialize the instruction file generator.
 
         Args:
-            output_dir: Directory where generated strategies will be saved
+            output_dir: Directory where instruction files will be saved
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Agent file paths
-        self.agents_dir = Path(".claude/agents/lumibot")
+        # Load template reference
+        self.template_path = self.output_dir / "TEMPLATE_zero_loss_butterfly.txt"
 
-        # Workflow state
-        self.current_step = 0
-        self.total_steps = 5
-        self.results = {}
-
-    def generate_strategy(
+    def generate_instruction_file(
         self,
         content: str,
         strategy_name: str,
-        content_type: str = "text",
+        source_type: str = "text",
+        source_url: str = None,
         progress_callback=None
     ) -> Dict:
         """
-        Generate complete Lumibot strategy using coordinated agents.
+        Generate instruction file from strategy content.
 
         Args:
             content: Trading strategy description (text, transcript, or PDF content)
-            strategy_name: Name for the generated strategy
-            content_type: Type of content ("text", "youtube", "pdf")
+            strategy_name: Name for the strategy
+            source_type: Type of content ("text", "youtube", "pdf")
+            source_url: Optional URL of source (for YouTube videos)
             progress_callback: Optional function to call with progress updates
 
         Returns:
             Dictionary containing:
                 - success: bool
-                - strategy_code: str (generated Python code)
-                - analysis: str (strategy analysis)
-                - architecture: str (architecture design)
-                - validation_report: str
-                - file_paths: dict (paths to all generated files)
+                - instruction_file: str (generated instruction content)
+                - file_path: str (path to saved file)
+                - preview: str (preview for UI)
                 - error: str (if failed)
         """
 
         try:
-            # Step 1: Research and analyze strategy
-            self._update_progress(1, "Analyzing strategy content...", progress_callback)
-            analysis = self._run_researcher_agent(content, strategy_name)
+            # Step 1: Extract key information
+            if progress_callback:
+                progress_callback(1, 3, "Analyzing strategy content...", 33)
 
-            if not analysis:
-                return {"success": False, "error": "Research agent failed"}
+            extracted_info = self._extract_strategy_info(content, source_type)
 
-            # Step 2: Design architecture
-            self._update_progress(2, "Designing strategy architecture...", progress_callback)
-            architecture = self._run_architect_agent(analysis, strategy_name)
+            # Step 2: Structure into template format
+            if progress_callback:
+                progress_callback(2, 3, "Structuring instruction file...", 66)
 
-            if not architecture:
-                return {"success": False, "error": "Architect agent failed"}
+            instruction_content = self._create_instruction_file(
+                extracted_info,
+                strategy_name,
+                source_type,
+                source_url
+            )
 
-            # Step 3: Generate code
-            self._update_progress(3, "Generating production code...", progress_callback)
-            code = self._run_coder_agent(architecture, strategy_name)
+            # Step 3: Save to file
+            if progress_callback:
+                progress_callback(3, 3, "Saving instruction file...", 100)
 
-            if not code:
-                return {"success": False, "error": "Coder agent failed"}
+            file_path = self.output_dir / f"{strategy_name}_instructions.txt"
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(instruction_content)
 
-            # Step 4: Validate code
-            self._update_progress(4, "Validating code quality...", progress_callback)
-            validation = self._run_validator_agent(code, strategy_name)
+            # Create preview (first 1000 characters)
+            preview = instruction_content[:1000]
+            if len(instruction_content) > 1000:
+                preview += "\n\n... (see full file for complete instructions)"
 
-            # Step 5: Optimize if needed
-            if validation and not validation.get("is_valid", False):
-                self._update_progress(5, "Optimizing code...", progress_callback)
-                code = self._run_optimizer_agent(code, validation, strategy_name)
-            else:
-                self._update_progress(5, "Code validation passed!", progress_callback)
-
-            # Prepare result
-            result = {
+            return {
                 "success": True,
-                "strategy_code": code,
-                "analysis": analysis,
-                "architecture": architecture,
-                "validation_report": validation,
-                "file_paths": {
-                    "code": str(self.output_dir / f"{strategy_name}.py"),
-                    "analysis": str(self.output_dir / f"{strategy_name}_analysis.md"),
-                    "architecture": str(self.output_dir / f"{strategy_name}_architecture.md"),
-                    "validation": str(self.output_dir / f"{strategy_name}_validation.md"),
-                }
+                "instruction_file": instruction_content,
+                "file_path": str(file_path),
+                "preview": preview
             }
-
-            return result
 
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Agent coordination failed: {str(e)}"
+                "error": f"Instruction file generation failed: {str(e)}"
             }
 
-    def _update_progress(self, step: int, message: str, callback=None):
-        """Update progress tracking."""
-        self.current_step = step
-        progress = (step / self.total_steps) * 100
-
-        if callback:
-            callback(step, self.total_steps, message, progress)
-
-        print(f"[{step}/{self.total_steps}] {message}")
-
-    def _invoke_agent_via_file(self, agent_name: str, prompt: str, output_path: Path,
-                                content: str, strategy_name: str) -> Optional[str]:
+    def _extract_strategy_info(self, content: str, source_type: str) -> Dict:
         """
-        Invoke a Claude Code agent by writing a prompt file and reading the result.
+        Extract key strategy information from content.
 
-        This is a bridge method that allows the Streamlit webapp to trigger
-        Claude Code agents. In practice, this creates a prompt that Claude Code
-        can pick up and process.
+        This is a simplified extraction. In a full implementation,
+        this would use NLP or Claude API to extract structured information.
+        """
+
+        # For now, return the raw content with metadata
+        # The user will edit this in the Streamlit UI
+        return {
+            "content": content,
+            "content_length": len(content),
+            "source_type": source_type,
+            "extracted_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+    def _create_instruction_file(
+        self,
+        extracted_info: Dict,
+        strategy_name: str,
+        source_type: str,
+        source_url: str = None
+    ) -> str:
+        """
+        Create instruction file content following the template format.
+
+        Template structure based on:
+        - Outputs/Inscructions/README_TEMPLATE_GUIDE.md
+        - Outputs/Inscructions/TEMPLATE_zero_loss_butterfly.txt
+        """
+
+        content = extracted_info["content"]
+
+        # Generate instruction file with template structure
+        instruction = f"""Strategy Instruction File
+Generated: {extracted_info['extracted_date']}
+Source: {source_type.upper()}"""
+
+        if source_url:
+            instruction += f"\nSource URL: {source_url}"
+
+        instruction += f"""
+
+Strategy Name: {strategy_name}
+
+---
+
+INSTRUCTIONS FOR EDITING:
+
+This instruction file follows the template format from:
+- Outputs/Inscructions/README_TEMPLATE_GUIDE.md
+- Outputs/Inscructions/TEMPLATE_zero_loss_butterfly.txt
+
+Please complete each section below based on the strategy content.
+Mark critical implementation details with **CRITICAL:** prefix.
+
+---
+
+## Source Content
+
+{content[:3000]}"""
+
+        if len(content) > 3000:
+            instruction += f"\n\n... (content truncated, total length: {len(content)} characters)"
+
+        instruction += """
+
+---
+
+## Strategy Structure
+
+**TODO: Complete the sections below by analyzing the source content above**
+
+### Asset Class
+- [Specify: Stocks, ETFs, Options, Futures]
+- Primary symbols: [List specific symbols]
+- Price range or other constraints: [If applicable]
+
+### Entry Conditions
+
+1. [First entry condition with specific parameters]
+2. [Second entry condition]
+3. [Additional conditions...]
+
+**CRITICAL:** [Mark any critical quantity specifications, e.g., "2 contracts NOT 1"]
+
+### Position Structure Verification
+- Check actual positions: [How to verify correct structure]
+- [Asset] should be purchased: [EXACTLY N times]
+- If [scenario], then [action]
+- Maintain [ratio/structure] at all times
+
+### Exit Conditions
+
+1. [Primary exit condition]
+2. [Roll logic if applicable]
+   - When: [days before expiration]
+   - What to keep: [stock, etc.]
+   - What to replace: [options, etc.]
+3. If exit fails: [Retry logic, max attempts]
+4. Exit entire position if: [End conditions]
+
+### Position Sizing
+- [Specify exact quantities]
+- [Contract sizes]
+- [Capital requirements]
+
+### Risk Management
+
+Stop Loss:
+- [Specific stop loss rules or "None"]
+
+Take Profit:
+- [Specific take profit targets]
+
+Maximum Position Size:
+- [Maximum contracts/shares]
+
+Capital at Risk:
+- [Estimated capital requirement]
+
+### Timeframe
+- Position holding period: [Duration]
+- Check frequency: [How often strategy runs]
+- Execution timing: [Intraday, daily, etc.]
+
+### Technical Indicators
+- [List indicators with exact parameters]
+- OR: "None - structure-based strategy"
+
+---
+
+## Implementation Requirements
+
+**CRITICAL: [Most important implementation gotcha]**
+- [Specific detail about position tracking]
+- [Strike rounding logic if options]
+- [Order execution sequence]
+
+**Strike Selection Requirements** (if options):
+- Query option chain with: `self.get_chains()`
+- Round target strikes to nearest $[X]: `round(price / X) * X`
+- Find nearest available strikes from chain
+
+**Order Execution**:
+- Submit [N] legs as separate orders
+- Use market orders for backtesting reliability
+- Check fill status on next iteration
+- Log all order submissions with identifiers
+
+**Position Management**:
+- Every iteration: Check actual positions held
+- Verify: [specific position structure]
+- If mismatch: [re-entry logic]
+
+---
+
+## Testing Requirements
+
+### 1. Confirmed Trade Test (if source has specific example)
+- Date: [Specific dates from source]
+- Symbol: [Specific symbol]
+- Expected entry price: ~$[X]
+- Expected outcome: [What should happen]
+- Purpose: Validate strategy matches source specifications
+
+### 2. Historical Data Test (Reliability)
+- Date: [Suggest 1 year prior for complete data]
+- Symbols: [Test with multiple symbols if applicable]
+- Purpose: Complete data availability, successful execution
+- Compare: [Performance between symbols or vs benchmark]
+
+### 3. Validation Requirements
+- Create validator script to check trades CSV:
+  * Count [specific events]
+  * Verify [specific structure]
+  * Calculate [specific metrics]
+  * Validate [specific behavior]
+
+### 4. Performance Comparison
+- Compare strategy vs [benchmark, e.g., buy-and-hold]
+- Metrics: Total return, CAGR, Sharpe ratio, max drawdown
+- Generate tearsheet for both strategy and benchmark
+- Determine: Is this strategy profitable?
+
+---
+
+## Configuration
+
+- Use parameterized backtesting dates (NOT environment variables)
+- Create credentials.py for API keys (no dates in credentials)
+- Each test script defines its own date range
+- Follow pattern from StrategyTemplate.py
+
+---
+
+## Expected Deliverables
+
+1. Complete Lumibot strategy class: {strategy_name}.py
+2. Test script for confirmed trade: test_{strategy_name}_confirmed.py
+3. Test script for historical data: test_{strategy_name}_historical.py
+4. Validator script: {strategy_name}_validator.py
+5. Configuration: credentials.py (template provided)
+6. Documentation:
+   - {strategy_name}_ANALYSIS.md (strategy analysis)
+   - {strategy_name}_RESULTS.md (backtest results)
+   - {strategy_name}_RECOMMENDATION.md (final assessment)
+
+---
+
+## Risk Assessment
+
+Overall Risk Level: [LOW / MODERATE / HIGH / VERY HIGH]
+
+Risks:
+1. [Specific risk 1]
+2. [Specific risk 2]
+3. [Additional risks...]
+
+Mitigation:
+1. [How risk 1 is mitigated]
+2. [How risk 2 is mitigated]
+3. [Additional mitigations...]
+
+---
+
+## Expected Outcome
+
+**TODO: After testing, document expected results here**
+
+Based on testing:
+- Strategy return: [X%]
+- Benchmark return: [Y%]
+- Volatility: [Reduction or increase]
+- Sharpe ratio: [Value]
+
+**RECOMMENDATION**: [PROFITABLE / NOT PROFITABLE / NEEDS MORE TESTING]
+
+[Explanation of recommendation]
+
+Better alternatives: [If not profitable, suggest alternatives]
+
+---
+
+## Implementation Notes
+
+1. [Important note about strategy behavior]
+2. [Market conditions where strategy works best]
+3. [Limitations or considerations]
+4. [Educational value vs production readiness]
+
+---
+
+## Next Steps
+
+1. Review and complete all TODO sections above
+2. Verify all quantities and parameters are specific (not vague)
+3. Mark all critical details with **CRITICAL:** prefix
+4. Save edited instruction file
+5. Use with /lumibot-generate command:
+   ```
+   /lumibot-generate
+
+   Read the instruction file at: {self.output_dir}/{strategy_name}_instructions.txt
+
+   Generate a complete Lumibot strategy following the specifications.
+   Output to: Outputs/Strategies/
+   ```
+
+---
+
+Generated by: Lumibot Strategy Generator (Enhanced)
+Template based on: Zero Loss Butterfly lessons learned
+"""
+
+        return instruction
+
+    def validate_instruction_file(self, file_path: str) -> Dict:
+        """
+        Validate that an instruction file meets template requirements.
 
         Args:
-            agent_name: Name of the agent to invoke
-            prompt: The detailed prompt for the agent
-            output_path: Where the agent should write its output
-            content: The strategy content being analyzed
-            strategy_name: Name of the strategy
+            file_path: Path to instruction file to validate
 
         Returns:
-            The agent's output as a string, or None if failed
+            Dictionary with validation results
         """
 
-        # Create a prompt file that can be processed
-        prompt_path = self.output_dir / f"{strategy_name}_{agent_name}_prompt.txt"
-
-        with open(prompt_path, 'w', encoding='utf-8') as f:
-            f.write(prompt)
-
-        print(f"[INFO] Agent prompt written to: {prompt_path}")
-        print(f"[INFO] NOTE: This requires Claude Code to process the {agent_name} agent")
-        print(f"[INFO] Expected output: {output_path}")
-
-        # For now, return a notice that this needs Claude Code integration
-        # In the future, this could invoke the Anthropic API directly
-        return f"""
-# {agent_name.title()} Output
-
-**NOTE:** This is a transition implementation. The full agent system requires integration with Claude Code's Task tool or Anthropic API.
-
-**Prompt File:** {prompt_path}
-**Expected Output:** {output_path}
-
-To complete this strategy generation, the {agent_name} agent needs to:
-1. Read the strategy content
-2. Apply the analysis defined in .claude/agents/lumibot/{agent_name}.md
-3. Generate the appropriate output
-
-**Next Steps:**
-- Integrate with Anthropic API to invoke agents programmatically
-- Or use Claude Code's Task tool to spawn subagents
-- Or process these prompts manually through Claude Code CLI
-"""
-
-    def _run_researcher_agent(self, content: str, strategy_name: str) -> Optional[str]:
-        """
-        Run lumibot-researcher agent to analyze strategy content.
-
-        This agent extracts:
-        - Entry conditions with specific parameters
-        - Exit conditions with thresholds
-        - Position sizing rules
-        - Risk management requirements
-        - Required Lumibot methods
-        """
-
-        # Create analysis output path
-        analysis_path = self.output_dir / f"{strategy_name}_analysis.md"
-
-        # Prepare prompt for the researcher agent
-        researcher_prompt = f"""
-You are the lumibot-researcher agent. Analyze the following trading strategy content and extract precise trading rules.
-
-**Strategy Content:**
-{content}
-
-**Your Task:**
-1. Extract all entry conditions with exact parameters (indicators, thresholds, timeframes)
-2. Extract all exit conditions (take profit, stop loss, time-based)
-3. Identify position sizing rules
-4. Determine asset type (stocks, options, futures) and specific symbols
-5. For options: identify expiration logic, strike selection, spreads vs single-leg
-6. List all required Lumibot methods needed to implement this strategy
-7. Identify all technical indicators with exact parameters
-
-**Output Format:**
-Create a detailed markdown document with these sections:
-- Strategy Classification (type, timeframe, complexity, risk level)
-- Entry Conditions (numbered list with exact parameters)
-- Exit Conditions (specific rules)
-- Position Sizing (exact amounts or percentages)
-- Asset Information (symbols, types, option specifics)
-- Required Lumibot Methods (list with usage examples)
-- Technical Indicators (name, parameters, library)
-- Special Considerations
-
-**Reference:** Use the Lumibot API documentation in .claude/docs/lumibot-reference.md
-
-**Output File:** {analysis_path}
-
-Save your complete analysis to the output file specified above.
-"""
-
-        # In a real implementation, this would use Claude Code's Task tool
-        # For now, we'll create a temporary implementation that calls this as a prompt
-        # The proper way would be: self._invoke_claude_agent("lumibot-researcher", researcher_prompt)
-
-        analysis = self._invoke_agent_via_file(
-            agent_name="lumibot-researcher",
-            prompt=researcher_prompt,
-            output_path=analysis_path,
-            content=content,
-            strategy_name=strategy_name
-        )
-
-        return analysis
-
-    def _run_architect_agent(self, analysis: str, strategy_name: str) -> Optional[str]:
-        """
-        Run lumibot-architect agent to design strategy architecture.
-
-        This agent designs:
-        - Class structure
-        - Parameter management
-        - Helper methods
-        - State management
-        - Error handling architecture
-        """
-
-        # Create architecture output path
-        architecture_path = self.output_dir / f"{strategy_name}_architecture.md"
-
-        # Create architecture document
-        architecture = self._create_architecture_document(analysis, strategy_name)
-
-        # Save architecture
-        with open(architecture_path, 'w', encoding='utf-8') as f:
-            f.write(architecture)
-
-        return architecture
-
-    def _run_coder_agent(self, architecture: str, strategy_name: str) -> Optional[str]:
-        """
-        Run lumibot-coder agent to implement production code.
-
-        This agent generates:
-        - Complete Strategy class
-        - All helper methods
-        - Comprehensive error handling
-        - Detailed logging
-        - Proper Lumibot API usage
-        """
-
-        # Create code output path
-        code_path = self.output_dir / f"{strategy_name}.py"
-
-        # Generate code
-        code = self._create_strategy_code(architecture, strategy_name)
-
-        # Save code
-        with open(code_path, 'w', encoding='utf-8') as f:
-            f.write(code)
-
-        return code
-
-    def _run_validator_agent(self, code: str, strategy_name: str) -> Optional[Dict]:
-        """
-        Run lumibot-validator agent to validate code quality.
-
-        This agent checks:
-        - Python syntax (AST parsing)
-        - Lumibot API compliance
-        - Error handling presence
-        - Risk management
-        - Code quality metrics
-        """
-
-        import ast
-
-        validation = {
-            "is_valid": False,
-            "syntax_valid": False,
-            "critical_issues": [],
-            "warnings": [],
-            "suggestions": []
-        }
-
-        # Check syntax
         try:
-            ast.parse(code)
-            validation["syntax_valid"] = True
-        except SyntaxError as e:
-            validation["critical_issues"].append(f"Syntax error: {e}")
-            return validation
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-        # Check Lumibot requirements
-        required_checks = {
-            "inherits_strategy": "class " in code and "(Strategy)" in code,
-            "has_initialize": "def initialize(self)" in code,
-            "has_on_trading_iteration": "def on_trading_iteration(self)" in code,
-            "sets_sleeptime": "self.sleeptime" in code,
-        }
+            # Required sections
+            required_sections = [
+                "Strategy Name:",
+                "Entry Conditions",
+                "Exit Conditions",
+                "Position Sizing",
+                "Risk Management",
+                "Implementation Requirements",
+                "Testing Requirements",
+                "Expected Deliverables"
+            ]
 
-        for check, passed in required_checks.items():
-            if not passed:
-                validation["critical_issues"].append(f"Missing: {check}")
+            missing_sections = []
+            for section in required_sections:
+                if section not in content:
+                    missing_sections.append(section)
 
-        # Check error handling
-        if "try:" not in code or "except" not in code:
-            validation["warnings"].append("No error handling found")
+            # Check for CRITICAL markers
+            has_critical_markers = "**CRITICAL:" in content
 
-        # Overall validation
-        validation["is_valid"] = validation["syntax_valid"] and len(validation["critical_issues"]) == 0
+            # Check for TODO markers (should be completed)
+            has_todos = "**TODO:" in content or "[TODO]" in content
 
-        # Save validation report
-        validation_path = self.output_dir / f"{strategy_name}_validation.md"
-        self._save_validation_report(validation, validation_path)
+            is_valid = len(missing_sections) == 0 and has_critical_markers
 
-        return validation
-
-    def _run_optimizer_agent(self, code: str, validation: Dict, strategy_name: str) -> Optional[str]:
-        """
-        Run lumibot-optimizer agent to fix issues and optimize code.
-
-        This agent:
-        - Fixes critical validation issues
-        - Optimizes performance
-        - Refactors for clarity
-        - Adds missing features
-        """
-
-        # For demo, return original code
-        # In production, this would fix issues from validation
-
-        optimized_code = code
-
-        # Add missing components based on validation
-        if "No error handling found" in str(validation.get("warnings", [])):
-            # Would add error handling here
-            pass
-
-        return optimized_code
-
-    # Helper methods for document creation
-
-    def _create_analysis_document(self, content: str, strategy_name: str) -> str:
-        """Create strategy analysis document."""
-
-        return f"""# Strategy Analysis: {strategy_name}
-
-**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Input Content
-
-{content[:500]}...
-
-## Strategy Classification
-
-- **Type**: [To be analyzed by Claude agent]
-- **Timeframe**: [To be determined]
-- **Asset Class**: [Stocks/Options/Futures]
-- **Complexity**: [Simple/Moderate/Complex]
-
-## Entry Conditions
-
-[To be extracted by researcher agent]
-
-## Exit Conditions
-
-[To be extracted by researcher agent]
-
-## Position Sizing
-
-[To be determined]
-
-## Required Lumibot Methods
-
-[To be identified]
-
----
-
-*This is a placeholder. In production, the lumibot-researcher agent would analyze the content and extract precise trading rules.*
-"""
-
-    def _create_architecture_document(self, analysis: str, strategy_name: str) -> str:
-        """Create architecture design document."""
-
-        return f"""# Strategy Architecture: {strategy_name}
-
-**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Class Structure
-
-```python
-class {strategy_name.replace('_', ' ').title().replace(' ', '')}(Strategy):
-    parameters = {{
-        # To be designed
-    }}
-
-    def initialize(self):
-        pass
-
-    def on_trading_iteration(self):
-        pass
-```
-
-## Helper Methods
-
-[To be designed by architect agent]
-
----
-
-*This is a placeholder. In production, the lumibot-architect agent would design complete architecture.*
-"""
-
-    def _create_strategy_code(self, architecture: str, strategy_name: str) -> str:
-        """Create basic strategy code template."""
-
-        class_name = strategy_name.replace('_', ' ').title().replace(' ', '')
-
-        return f'''"""
-{class_name} - Lumibot Trading Strategy
-
-Generated by Claude Code Agents
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-
-from lumibot.strategies import Strategy
-from lumibot.backtesting import YahooDataBacktesting
-from datetime import datetime
-import pandas_ta as ta
-
-
-class {class_name}(Strategy):
-    """
-    Trading strategy implementation.
-
-    [Strategy description to be generated by coder agent]
-    """
-
-    parameters = {{
-        "symbol": "SPY",
-    }}
-
-    def initialize(self):
-        """Initialize strategy parameters."""
-        self.sleeptime = "1D"
-        self.symbol = self.parameters.get("symbol", "SPY")
-
-    def on_trading_iteration(self):
-        """Main trading logic."""
-        try:
-            # Get current price
-            price = self.get_last_price(self.symbol)
-
-            # Placeholder logic
-            # Real implementation would be generated by coder agent
-
-            self.log_message(f"Price: ${{price:.2f}}")
+            return {
+                "is_valid": is_valid,
+                "missing_sections": missing_sections,
+                "has_critical_markers": has_critical_markers,
+                "has_incomplete_todos": has_todos,
+                "validation_message": self._get_validation_message(
+                    is_valid, missing_sections, has_critical_markers, has_todos
+                )
+            }
 
         except Exception as e:
-            self.log_message(f"ERROR: {{str(e)}}")
+            return {
+                "is_valid": False,
+                "error": f"Validation failed: {str(e)}"
+            }
 
+    def _get_validation_message(
+        self,
+        is_valid: bool,
+        missing_sections: list,
+        has_critical: bool,
+        has_todos: bool
+    ) -> str:
+        """Generate validation message."""
 
-if __name__ == "__main__":
-    # Backtest configuration
-    {class_name}.backtest(
-        YahooDataBacktesting,
-        datetime(2023, 1, 1),
-        datetime(2023, 12, 31),
-        parameters={{"symbol": "SPY"}},
-        benchmark_asset="SPY"
-    )
-'''
+        if is_valid and not has_todos:
+            return "✅ Instruction file is complete and ready for /lumibot-generate"
 
-    def _save_validation_report(self, validation: Dict, path: Path):
-        """Save validation report to file."""
+        messages = []
 
-        report = f"""# Validation Report
+        if missing_sections:
+            messages.append(f"❌ Missing sections: {', '.join(missing_sections)}")
 
-**Status**: {'✅ PASSED' if validation['is_valid'] else '❌ FAILED'}
+        if not has_critical:
+            messages.append("⚠️ No **CRITICAL:** markers found - add for important details")
 
-## Syntax Check
-{'✅ Valid' if validation['syntax_valid'] else '❌ Invalid'}
+        if has_todos:
+            messages.append("⚠️ TODO markers found - complete these sections before generation")
 
-## Critical Issues ({len(validation['critical_issues'])})
-"""
-
-        for issue in validation['critical_issues']:
-            report += f"- ❌ {issue}\n"
-
-        report += f"\n## Warnings ({len(validation['warnings'])})\n"
-        for warning in validation['warnings']:
-            report += f"- ⚠️ {warning}\n"
-
-        report += f"\n## Suggestions ({len(validation['suggestions'])})\n"
-        for suggestion in validation['suggestions']:
-            report += f"- ℹ️ {suggestion}\n"
-
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(report)
+        return "\n".join(messages)
 
 
 # Convenience functions for direct use
 
-def generate_lumibot_strategy(
+def generate_instruction_file(
     content: str,
     strategy_name: str,
-    content_type: str = "text",
-    output_dir: str = "Outputs/Strategies",
+    source_type: str = "text",
+    source_url: str = None,
+    output_dir: str = "Outputs/Inscructions",
     progress_callback=None
 ) -> Dict:
     """
-    Generate a complete Lumibot strategy from content.
+    Generate an instruction file from strategy content.
 
-    This is the main entry point for strategy generation.
+    This is the main entry point for instruction file generation.
 
     Args:
         content: Trading strategy description
-        strategy_name: Name for the generated strategy
-        content_type: "text", "youtube", or "pdf"
-        output_dir: Where to save generated files
+        strategy_name: Name for the strategy
+        source_type: "text", "youtube", or "pdf"
+        source_url: Optional URL of source
+        output_dir: Where to save instruction file
         progress_callback: Optional callback for progress updates
 
     Returns:
         Dictionary with generation results
 
     Example:
-        >>> result = generate_lumibot_strategy(
+        >>> result = generate_instruction_file(
         ...     content="Buy when RSI < 30, sell when RSI > 70",
-        ...     strategy_name="rsi_strategy"
+        ...     strategy_name="rsi_strategy",
+        ...     source_type="text"
         ... )
         >>> if result['success']:
-        ...     print(result['strategy_code'])
+        ...     print(f"Saved to: {result['file_path']}")
     """
 
-    coordinator = ClaudeAgentCoordinator(output_dir)
-    return coordinator.generate_strategy(
+    generator = InstructionFileGenerator(output_dir)
+    return generator.generate_instruction_file(
         content=content,
         strategy_name=strategy_name,
-        content_type=content_type,
+        source_type=source_type,
+        source_url=source_url,
         progress_callback=progress_callback
     )
 
 
-def validate_strategy_code(code: str, strategy_name: str = "strategy") -> Dict:
+def validate_instruction_file(file_path: str) -> Dict:
     """
-    Validate Lumibot strategy code.
+    Validate an instruction file for template compliance.
 
     Args:
-        code: Python code to validate
-        strategy_name: Name of strategy (for reporting)
+        file_path: Path to instruction file
 
     Returns:
         Validation results dictionary
     """
 
-    coordinator = ClaudeAgentCoordinator()
-    return coordinator._run_validator_agent(code, strategy_name)
+    generator = InstructionFileGenerator()
+    return generator.validate_instruction_file(file_path)
+
+
+# Backward compatibility - deprecated functions
+
+def generate_lumibot_strategy(*args, **kwargs):
+    """
+    DEPRECATED: Use generate_instruction_file instead.
+
+    The two-stage workflow is:
+    1. generate_instruction_file (this module)
+    2. /lumibot-generate command (with instruction file)
+    """
+    import warnings
+    warnings.warn(
+        "generate_lumibot_strategy is deprecated. "
+        "Use generate_instruction_file + /lumibot-generate command instead.",
+        DeprecationWarning
+    )
+
+    # Convert to new API
+    return generate_instruction_file(*args, **kwargs)
+
+
+def validate_strategy_code(*args, **kwargs):
+    """DEPRECATED: Validation now happens in /lumibot-generate workflow."""
+    import warnings
+    warnings.warn(
+        "validate_strategy_code is deprecated. "
+        "Validation now happens automatically in /lumibot-generate workflow.",
+        DeprecationWarning
+    )
+    return {"is_valid": True, "message": "Use /lumibot-generate for validation"}
 
 
 # For testing
 if __name__ == "__main__":
     print("=" * 60)
-    print("Claude Agent Integration for Lumibot")
+    print("Instruction File Generator for Lumibot")
     print("=" * 60)
 
-    # Test strategy generation
+    # Test instruction file generation
     test_content = """
     Buy SPY when RSI(14) crosses below 30 (oversold).
     Sell SPY when RSI(14) crosses above 70 (overbought).
@@ -621,21 +589,22 @@ if __name__ == "__main__":
     Take profit at 10% gain, stop loss at 5% loss.
     """
 
-    print("\nGenerating test strategy...")
+    print("\nGenerating test instruction file...")
 
     def progress_update(step, total, message, progress):
         print(f"  [{progress:.0f}%] {message}")
 
-    result = generate_lumibot_strategy(
+    result = generate_instruction_file(
         content=test_content,
         strategy_name="rsi_test_strategy",
+        source_type="text",
         progress_callback=progress_update
     )
 
     if result['success']:
-        print("\n[SUCCESS] Strategy generated successfully!")
-        print(f"\nFiles created:")
-        for name, path in result['file_paths'].items():
-            print(f"  - {name}: {path}")
+        print("\n[SUCCESS] Instruction file generated successfully!")
+        print(f"\nFile saved to: {result['file_path']}")
+        print(f"\nPreview:\n{result['preview']}")
+        print("\n[NEXT STEP] Use with /lumibot-generate command")
     else:
         print(f"\n[FAILED] Generation failed: {result.get('error')}")
