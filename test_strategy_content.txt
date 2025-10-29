@@ -1,0 +1,28 @@
+Simple RSI Mean Reversion Strategy
+
+This is a simple moving average crossover strategy for SPY.
+
+Entry Rules:
+- Buy SPY when the 9-day EMA crosses above the 21-day EMA
+- Position size: 100% of available cash
+- Enter at market price on the next trading day
+
+Exit Rules:
+- Sell when the 9-day EMA crosses below the 21-day EMA
+- Exit at market price on the next trading day
+
+Timeframe: Daily (check once per day at market close)
+
+Risk Management:
+- Stop loss: None (exit on signal only)
+- Take profit: None (exit on signal only)
+- Maximum position: 100% of portfolio
+
+Testing:
+- Test on SPY from January 1, 2023 to December 31, 2023
+- Initial capital: $10,000
+- Compare against SPY buy-and-hold
+
+This is a simple trend-following strategy using exponential moving averages.
+No complex options or multi-leg positions.
+Should be straightforward to implement with basic Lumibot methods.
