@@ -46,9 +46,12 @@ logs/
 *.pickle
 tearsheet_*.png
 
-# But keep instruction files
+# But keep instruction files and generated strategies
 !Outputs/Instructions/*.txt
 !Outputs/Instructions/*.md
+!Outputs/Inscructions/*.txt
+!Outputs/Inscructions/*.md
+!Outputs/Strategies/*.py
 
 # Jupyter Notebooks
 .ipynb_checkpoints
