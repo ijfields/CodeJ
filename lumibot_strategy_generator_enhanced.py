@@ -125,6 +125,13 @@ This enhanced version uses a two-stage approach for maximum control and quality:
 with st.sidebar:
     st.header("⚙️ Configuration")
 
+    # Navigation
+    st.subheader("📍 Navigation")
+    if st.button("📊 Review Strategies", use_container_width=True, type="primary"):
+        st.switch_page("pages/1_Review_Strategies.py")
+
+    st.divider()
+
     st.subheader("Input Method")
     input_type = st.radio(
         "Select input type:",

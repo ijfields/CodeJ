@@ -53,6 +53,42 @@ tearsheet_*.png
 !Outputs/Inscructions/*.md
 !Outputs/Strategies/*.py
 
+# DataTools - Keep source, exclude cache
+DataTools/__pycache__/
+
+# Keep DataTools documentation
+!DataTools/README*.md
+
+# Keep screenshots and critical evidence
+!Outputs/ForReview/no loss/screenshots/*.png
+!Outputs/ForReview/no loss/screenshots/
+
+# Keep all markdown documentation in ForReview
+!Outputs/ForReview/**/*.md
+
+# Keep test and config scripts in ForReview
+!Outputs/ForReview/**/*.py
+
+# Exclude temporary/generated files in ForReview but keep source
+Outputs/ForReview/no loss/logs/
+Outputs/ForReview/no loss/*.log
+Outputs/ForReview/no loss/*_tearsheet.html
+Outputs/ForReview/no loss/*_tearsheet.csv
+Outputs/ForReview/no loss/*_trades.csv
+Outputs/ForReview/no loss/*_stats.csv
+Outputs/ForReview/no loss/*_settings.json
+
+# But keep settings from screenshots (evidence)
+!Outputs/ForReview/no loss/ZeroLossButterfly_2025-10-26_06-38_lx4hKM_settings.json
+
+# Root level temporary files
+bash.exe.stackdump
+nul
+SESSION_SUMMARY_*.md
+
+# But keep credentials example
+!credentials_example.py
+
 # Jupyter Notebooks
 .ipynb_checkpoints
 *.ipynb

@@ -1,0 +1,235 @@
+Strategy Instruction File
+Generated: 2025-10-29 12:55:48
+Source: TEXT
+
+Strategy Name: rsi_test_strategy
+
+---
+
+INSTRUCTIONS FOR EDITING:
+
+This instruction file follows the template format from:
+- Outputs/Inscructions/README_TEMPLATE_GUIDE.md
+- Outputs/Inscructions/TEMPLATE_zero_loss_butterfly.txt
+
+Please complete each section below based on the strategy content.
+Mark critical implementation details with **CRITICAL:** prefix.
+
+---
+
+## Source Content
+
+
+    Buy SPY when RSI(14) crosses below 30 (oversold).
+    Sell SPY when RSI(14) crosses above 70 (overbought).
+    Use daily timeframe.
+    Position size: 95% of available cash.
+    Take profit at 10% gain, stop loss at 5% loss.
+    
+
+---
+
+## Strategy Structure
+
+**TODO: Complete the sections below by analyzing the source content above**
+
+### Asset Class
+- [Specify: Stocks, ETFs, Options, Futures]
+- Primary symbols: [List specific symbols]
+- Price range or other constraints: [If applicable]
+
+### Entry Conditions
+
+1. [First entry condition with specific parameters]
+2. [Second entry condition]
+3. [Additional conditions...]
+
+**CRITICAL:** [Mark any critical quantity specifications, e.g., "2 contracts NOT 1"]
+
+### Position Structure Verification
+- Check actual positions: [How to verify correct structure]
+- [Asset] should be purchased: [EXACTLY N times]
+- If [scenario], then [action]
+- Maintain [ratio/structure] at all times
+
+### Exit Conditions
+
+1. [Primary exit condition]
+2. [Roll logic if applicable]
+   - When: [days before expiration]
+   - What to keep: [stock, etc.]
+   - What to replace: [options, etc.]
+3. If exit fails: [Retry logic, max attempts]
+4. Exit entire position if: [End conditions]
+
+### Position Sizing
+- [Specify exact quantities]
+- [Contract sizes]
+- [Capital requirements]
+
+### Risk Management
+
+Stop Loss:
+- [Specific stop loss rules or "None"]
+
+Take Profit:
+- [Specific take profit targets]
+
+Maximum Position Size:
+- [Maximum contracts/shares]
+
+Capital at Risk:
+- [Estimated capital requirement]
+
+### Timeframe
+- Position holding period: [Duration]
+- Check frequency: [How often strategy runs]
+- Execution timing: [Intraday, daily, etc.]
+
+### Technical Indicators
+- [List indicators with exact parameters]
+- OR: "None - structure-based strategy"
+
+---
+
+## Implementation Requirements
+
+**CRITICAL: [Most important implementation gotcha]**
+- [Specific detail about position tracking]
+- [Strike rounding logic if options]
+- [Order execution sequence]
+
+**Strike Selection Requirements** (if options):
+- Query option chain with: `self.get_chains()`
+- Round target strikes to nearest $[X]: `round(price / X) * X`
+- Find nearest available strikes from chain
+
+**Order Execution**:
+- Submit [N] legs as separate orders
+- Use market orders for backtesting reliability
+- Check fill status on next iteration
+- Log all order submissions with identifiers
+
+**Position Management**:
+- Every iteration: Check actual positions held
+- Verify: [specific position structure]
+- If mismatch: [re-entry logic]
+
+---
+
+## Testing Requirements
+
+### 1. Confirmed Trade Test (if source has specific example)
+- Date: [Specific dates from source]
+- Symbol: [Specific symbol]
+- Expected entry price: ~$[X]
+- Expected outcome: [What should happen]
+- Purpose: Validate strategy matches source specifications
+
+### 2. Historical Data Test (Reliability)
+- Date: [Suggest 1 year prior for complete data]
+- Symbols: [Test with multiple symbols if applicable]
+- Purpose: Complete data availability, successful execution
+- Compare: [Performance between symbols or vs benchmark]
+
+### 3. Validation Requirements
+- Create validator script to check trades CSV:
+  * Count [specific events]
+  * Verify [specific structure]
+  * Calculate [specific metrics]
+  * Validate [specific behavior]
+
+### 4. Performance Comparison
+- Compare strategy vs [benchmark, e.g., buy-and-hold]
+- Metrics: Total return, CAGR, Sharpe ratio, max drawdown
+- Generate tearsheet for both strategy and benchmark
+- Determine: Is this strategy profitable?
+
+---
+
+## Configuration
+
+- Use parameterized backtesting dates (NOT environment variables)
+- Create credentials.py for API keys (no dates in credentials)
+- Each test script defines its own date range
+- Follow pattern from StrategyTemplate.py
+
+---
+
+## Expected Deliverables
+
+1. Complete Lumibot strategy class: {strategy_name}.py
+2. Test script for confirmed trade: test_{strategy_name}_confirmed.py
+3. Test script for historical data: test_{strategy_name}_historical.py
+4. Validator script: {strategy_name}_validator.py
+5. Configuration: credentials.py (template provided)
+6. Documentation:
+   - {strategy_name}_ANALYSIS.md (strategy analysis)
+   - {strategy_name}_RESULTS.md (backtest results)
+   - {strategy_name}_RECOMMENDATION.md (final assessment)
+
+---
+
+## Risk Assessment
+
+Overall Risk Level: [LOW / MODERATE / HIGH / VERY HIGH]
+
+Risks:
+1. [Specific risk 1]
+2. [Specific risk 2]
+3. [Additional risks...]
+
+Mitigation:
+1. [How risk 1 is mitigated]
+2. [How risk 2 is mitigated]
+3. [Additional mitigations...]
+
+---
+
+## Expected Outcome
+
+**TODO: After testing, document expected results here**
+
+Based on testing:
+- Strategy return: [X%]
+- Benchmark return: [Y%]
+- Volatility: [Reduction or increase]
+- Sharpe ratio: [Value]
+
+**RECOMMENDATION**: [PROFITABLE / NOT PROFITABLE / NEEDS MORE TESTING]
+
+[Explanation of recommendation]
+
+Better alternatives: [If not profitable, suggest alternatives]
+
+---
+
+## Implementation Notes
+
+1. [Important note about strategy behavior]
+2. [Market conditions where strategy works best]
+3. [Limitations or considerations]
+4. [Educational value vs production readiness]
+
+---
+
+## Next Steps
+
+1. Review and complete all TODO sections above
+2. Verify all quantities and parameters are specific (not vague)
+3. Mark all critical details with **CRITICAL:** prefix
+4. Save edited instruction file
+5. Use with /lumibot-generate command:
+   ```
+   /lumibot-generate
+
+   Read the instruction file at: {self.output_dir}/{strategy_name}_instructions.txt
+
+   Generate a complete Lumibot strategy following the specifications.
+   Output to: Outputs/Strategies/
+   ```
+
+---
+
+Generated by: Lumibot Strategy Generator (Enhanced)
+Template based on: Zero Loss Butterfly lessons learned
